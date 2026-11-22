@@ -19,11 +19,30 @@ def b64(value):
 def serialize(obj):
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
+def tutorial_distribution(people, mean):
+    """Two synthetic risk groups give a known distribution for the open tutorial."""
+    top = people // 5
+    probability = mean / people
+    weights = [1.6 * probability] * top + [.85 * probability] * (people - top)
+    probabilities = [1.0]
+    for chance in weights:
+        probabilities.append(0.0)
+        for i in range(len(probabilities) - 1, 0, -1):
+            probabilities[i] = probabilities[i] * (1 - chance) + probabilities[i - 1] * chance
+        probabilities[0] *= 1 - chance
+    remaining = 1.0
+    for index, value in enumerate(probabilities):
+        remaining -= value
+        if remaining < 1e-8:
+            break
+    values = [round(x, 12) for x in probabilities[:index + 1]]
+    return {"probabilities": values, "tail_from": len(values), "tail_probability": max(0, round(1 - sum(values), 12))}
+
 def plain_demo(language):
     products = [dict(id="yuzu", name="유자 곡물칩", manufacturer="가상 제조사", scope="가상 스낵", sale="2025-04-21", dateLabel="가상 판매 시작", url=""),
                 dict(id="plum", name="자두 탄산수", manufacturer="가상 제조사", scope="가상 음료", sale="2025-06-02", dateLabel="가상 판매 시작", url="")]
     methods = {"category":"품목군 구매일 순위", "logit":"행동 회귀", "hierarchy":"계층 구매확률",
-               "sequence":"구매 순서 학습", "retrieval":"본인 구매 사례 검색", "blend":"세 모형 평균"}
+               "sequence":"구매 순서 학습", "retrieval":"본인 구매 사례 검색", "blend":"세 모형 평균", "common":"과거 출시 평균과 영수증 포착"}
     rows = []
     for j, prod in enumerate(products):
         actual = [12, 8][j]
@@ -32,6 +51,8 @@ def plain_demo(language):
                 slots, hits = 40, 4 + (idx+j)%3
                 expected = None if method=="category" else round([13.3,6.1][j]+(idx-2)*0.7+([0,-1.0,0.5][[0,20,80].index(budget)]),1)
                 rows.append(dict(id=prod["id"], method=method, budget=budget, update="none" if budget==0 else "global", cohort="fiction", eligible=200, observed=185-j, actual=actual, selected=slots,hits=hits,selected10=20,selected20=40,selected30=60,hits10=hits-2,hits20=hits,hits30=hits+2,first_actual=actual-1,first_hits=hits-1,expected=expected))
+                if expected is not None:
+                    rows[-1]["dist"] = tutorial_distribution(200, expected)
     return dict(version="tutorial-v1", products=products, methods=methods, primary="fiction", cohorts={"fiction":"가상 출시 두 건"},rows=rows,language=language)
 
 def render(config):
