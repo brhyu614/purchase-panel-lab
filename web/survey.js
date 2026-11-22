@@ -65,14 +65,14 @@ function bindPanelSurvey() {
   on("run-ap-survey",runPanelSurvey);
 }
 const personaMethods = [
-  ["match","비슷한 합성 프로필","match_null"],
-  ["factors","함께 언급한 음식 요인","factors_null"],
-  ["augment25","실제·합성 이력 혼합","augment_null"]
+  ["full_match","비슷한 합성 프로필","full_match_null"],
+  ["full_factors","함께 언급한 음식 요인","full_factors_null"],
+  ["full_augment100","실제·합성 이력 혼합","full_augment100_null"]
 ];
 function personaCard(p, t) {
   const all=db.personaComparison?.filter(row=>row.id===p.id);
   if (!all?.length) return "";
-  const design=t.personaView||{method:"match",budget:0};
+  const design=t.personaView||{method:"full_match",budget:0};
   const choice=personaMethods.find(m=>m[0]===design.method)||personaMethods[0];
   const scenarios=[["구매·음식 속성만 사용","direct"],[choice[1],choice[0]],["합성 속성 조합을 섞은 대조",choice[2]]];
   const rows=scenarios.map(([label,key])=>{
@@ -80,7 +80,7 @@ function personaCard(p, t) {
     if (!row) return "";
     return "<tr><td>"+esc(label)+"</td><td>"+f(row.expected)+"명</td>"+(t.seen?"<td>"+n(row.hits)+" / "+n(row.actual)+"건</td>":"")+"</tr>";
   }).join("");
-  return '<details id="persona-compare" '+(t.personaOpen?'open':'')+'><summary>이 제품에 NVIDIA 합성 프로필을 더하면</summary><p class="small" style="margin:9px 0">공개된 한국어 프로필의 음식 언급을 영수증 예측에 더한 별도 시험입니다. 같은 고객과 같은 판매 자리로 비교합니다.</p><div class="inlinefields">'+field("persona-method","합성 정보 이용법",select("persona-method",personaMethods.map(m=>m.slice(0,2)),choice[0]))+
+  return '<details id="persona-compare" '+(t.personaOpen?'open':'')+'><summary>이 제품에 NVIDIA 합성 프로필을 더하면</summary><p class="small" style="margin:9px 0">공개된 한국어 프로필 100만 건의 음식 언급을 영수증 예측에 더한 별도 시험입니다. 같은 고객과 같은 판매 자리로 비교합니다.</p><div class="inlinefields">'+field("persona-method","합성 정보 이용법",select("persona-method",personaMethods.map(m=>m.slice(0,2)),choice[0]))+
     field("persona-budget","이 시험의 초기 관측 설계",select("persona-budget",[[0,"0명"],[80,"80명"]],design.budget))+'</div><div class="tablebox"><table><thead><tr><th>입력</th><th>예상 기록 구매자</th>'+(t.seen?'<th>상위 20% 포착 / 전체 구매</th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="small">표의 예측은 별도 속성 모형으로 다시 계산했습니다. 2026년에 공개된 합성 자료를 2025년 실제 영수증에서 후향 비교했습니다.</p></details>';
 }
 function bindPersona() {
