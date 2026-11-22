@@ -66,8 +66,8 @@ def main():
         previous=eligible.get(key)
         rank=(row.get("updated",""),len(row.get("trials",[])),sum(len(t.get("questions",[])) for t in row.get("trials",[])))
         if previous is None or rank>previous[0]:eligible[key]=(rank,row)
-    baseline=after=n_pairs=correct=answered=switched=0
-    items=[];issues=collections.Counter();times=[]
+    baseline=after=n_pairs=correct=answered=switched=rank_diff=rank_pairs=0
+    items=[];issues=collections.Counter();times=[];arms=collections.defaultdict(list)
     translations={"denominator":"분모·영수증 누락","comparison":"비교 방법","selection":"고객 선정 근거","generalization":"다른 제품 적용","ux":"화면·질문 이해","other":"기타","easy":"쉬웠다","partial":"일부 어려웠다","hard":"어려웠다","panel":"패널의 기록 구매","national":"전국 구매","campaign":"안내의 인과효과","unclear":"분명하지 않음"}
     for i,((release,_),(_,r)) in enumerate(sorted(eligible.items()),1):
         fb=r.get("feedback") or {}; mention=fb.get("issue")
@@ -81,6 +81,11 @@ def main():
             if tr.get("blind") and all(isinstance(x, (int,float)) and not isinstance(x,bool) and 0<=x<=product["eligible"] for x in (before.get("value"),aft.get("value"))):
                 baseline+=abs(before["value"]-product["actual"]);after+=abs(aft["value"]-product["actual"]);n_pairs+=1
                 switched+=before.get("strategy")!=aft.get("strategy")
+                lookup=product.get("ranks",{})
+                sk1=before.get("strategy");sk2=aft.get("method") if aft.get("strategy")=="consult" else aft.get("strategy")
+                if sk1 in lookup and sk2 in lookup:
+                    rank_pairs+=1;rank_diff+=lookup[sk2]-lookup[sk1]
+                arms[tr.get("arm","demonstration")].append(abs(before["value"]-product["actual"])-abs(aft["value"]-product["actual"]))
                 try:
                     elapsed=(datetime.datetime.fromisoformat(aft["at"].replace("Z","+00:00"))-datetime.datetime.fromisoformat(before["at"].replace("Z","+00:00"))).total_seconds()
                     if elapsed>=0:times.append(elapsed)
@@ -89,9 +94,11 @@ def main():
             for q in tr.get("questions",[]):
                 if isinstance(q,dict):snippets.append("<li>"+clean(product["name"])+" · 질문 “"+clean(q.get("text"))+"”</li>")
         items.append("<article><h3>검토 "+str(i)+"</h3><p>"+clean(translations.get(fb.get("issue"),"쟁점 미표시"))+" · "+clean(translations.get(fb.get("usability"),"이용 난이도 미입력"))+" · "+clean(translations.get(fb.get("interpretation"),"분모 응답 없음"))+"</p><p>"+clean(fb.get("comment"))+"</p><ul>"+"".join(snippets)+"</ul></article>")
+    condition_names={"random_advice":"무작위 모형 조언","random_repeat":"무작위 같은 자료 재판단","demonstration":"일반 시연"}
+    armtext=" ".join(condition_names.get(k,k)+" "+str(len(v))+"쌍의 평균 오차 감소 "+fraction(sum(v),len(v))+"." for k,v in sorted(arms.items())) or "아직 비교할 가린 판단이 없습니다."
     title="구매 예측 · 연구자 회신함"
     style="body{font:17px/1.6 -apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;background:#f3f6f2;color:#17392f;max-width:980px;margin:40px auto;padding:12px}h1{letter-spacing:-.05em}section,article{background:white;padding:18px 22px;border:1px solid #dce4da;border-radius:12px;margin:12px 0}.metrics{display:flex;flex-wrap:wrap;gap:22px}.metrics strong,.metrics span{display:block}.metrics strong{font-size:1.8rem}.metrics span{font-size:.88rem}li{margin:5px 0}p{white-space:pre-wrap}"
-    result="<!doctype html><html lang='ko'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+title+"</title><style>"+style+"</style><main><h1>"+title+"</h1><p>같은 검토자의 회신은 최신 판을 남깁니다. 가린 전후 판단의 구매자 수는 해당 연구 판본의 고정된 실제 결과와 대조합니다.</p><section class='metrics'>"+metric(str(len(eligible))+"명","검토 회신")+metric(str(n_pairs)+"쌍","가린 전후 판단")+metric(fraction(baseline,n_pairs),"첫 예상 평균 절대오차")+metric(fraction(after,n_pairs),"최종 예상 평균 절대오차")+"</section><section><h2>이해와 결정</h2><p>구매자 수의 분모를 올바르게 해석한 검토는 "+str(correct)+" / "+str(answered)+"건입니다. 제안 대상 전략을 변경한 가린 판단은 "+str(switched)+" / "+str(n_pairs)+"쌍입니다.</p><p>"+(" · ".join(clean(k)+" "+str(n)+"건" for k,n in issues.most_common()) or "아직 기록된 쟁점이 없습니다.")+"</p></section>"+"".join(items)+("<p>형식을 확인할 수 없는 회신 "+str(errors)+"건</p>" if errors else "")+"<p>전후 차이에는 모형 제안과 반복 판단이 함께 반영됩니다. 사용성 평가는 같은 연구자의 반복 사례를 포함할 수 있습니다.</p></main></html>"
+    result="<!doctype html><html lang='ko'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+title+"</title><style>"+style+"</style><main><h1>"+title+"</h1><p>같은 검토자의 회신은 최신 판을 남깁니다. 가린 전후 판단의 구매자 수는 해당 연구 판본의 고정된 실제 결과와 대조합니다.</p><section class='metrics'>"+metric(str(len(eligible))+"명","검토 회신")+metric(str(n_pairs)+"쌍","가린 전후 판단")+metric(fraction(baseline,n_pairs),"첫 예상 평균 절대오차")+metric(fraction(after,n_pairs),"최종 예상 평균 절대오차")+"</section><section><h2>모형 조언과 재판단</h2><p>"+clean(armtext)+"</p><p>무작위 배정에 동의한 사례에서만 두 조건을 비교합니다. 같은 연구자가 여러 사례에 답할 수 있습니다.</p></section><section><h2>이해와 결정</h2><p>구매자 수의 분모를 올바르게 해석한 검토는 "+str(correct)+" / "+str(answered)+"건입니다. 제안 대상 전략을 변경한 가린 판단은 "+str(switched)+" / "+str(n_pairs)+"쌍입니다. 같은 상위 20%에서 두 전략을 모두 채점할 수 있는 "+str(rank_pairs)+"쌍의 포착 수 차이는 합계 "+str(rank_diff)+"건입니다.</p><p>"+(" · ".join(clean(k)+" "+str(n)+"건" for k,n in issues.most_common()) or "아직 기록된 쟁점이 없습니다.")+"</p></section>"+"".join(items)+("<p>형식을 확인할 수 없는 회신 "+str(errors)+"건</p>" if errors else "")+"<p>전후 차이에는 모형 제안과 반복 판단이 함께 반영됩니다. 사용성 평가는 같은 연구자의 반복 사례를 포함할 수 있습니다.</p></main></html>"
     args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(result)
     print(json.dumps({"reviewers":len(eligible),"blind_pairs":n_pairs,"invalid":errors,"baseline_sum":baseline,"after_sum":after},ensure_ascii=False))
 if __name__=="__main__":main()

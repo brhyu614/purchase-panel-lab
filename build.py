@@ -37,7 +37,7 @@ def plain_demo(language):
 def render(config):
     web = ROOT/"web"
     template = (web/"shell.html").read_text()
-    js="\n".join((web/n).read_text() for n in ("app.js","simulation.js","router.js","study.js"))
+    js="\n".join((web/n).read_text() for n in ("app.js","simulation.js","router.js","survey.js","study.js"))
     return template.replace("/*__CSS__*/",(web/"styles.css").read_text()).replace("__CONFIG__",serialize(config).replace("<","\\u003c")).replace("/*__JS__*/",js)
 
 def main():
